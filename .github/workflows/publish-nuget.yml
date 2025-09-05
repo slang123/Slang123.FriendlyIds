@@ -1,0 +1,95 @@
+name: Publish NuGet
+
+on:
+  # Push a tag like v1.2.3 to publish
+  push:
+    tags:
+      - 'v*.*.*'
+  # Manual publish with an input version (e.g. 1.2.3)
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (e.g. 1.2.3). Leave empty to use csproj Version.'
+        required: false
+        type: string
+
+jobs:
+  pack-and-publish:
+    runs-on: ubuntu-latest
+
+    env:
+      # Path to your library project (adjust if needed)
+      PROJECT_PATH: Slang123.FriendlyIds.csproj
+      ARTIFACT_DIR: artifacts
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore $PROJECT_PATH
+
+      - name: Build (Release)
+        run: dotnet build $PROJECT_PATH -c Release --no-restore
+
+      # Optional: run tests if you have them
+      # - name: Test
+      #   run: dotnet test -c Release --no-build --verbosity normal
+
+      - name: Compute version from tag or input
+        id: version
+        shell: bash
+        run: |
+          # If triggered by tag v1.2.3 -> 1.2.3
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME#v}"
+            echo "version=$TAG" >> $GITHUB_OUTPUT
+          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            # fallback: read <Version> from csproj
+            VER=$(grep -oPm1 '(?<=<Version>)[^<]+' "$PROJECT_PATH" || true)
+            echo "version=$VER" >> $GITHUB_OUTPUT
+          fi
+
+      # Optional safety gate: ensure version is non-empty
+      - name: Fail if version empty
+        if: ${{ steps.version.outputs.version == '' }}
+        run: |
+          echo "Version is empty. Set it in tag (vX.Y.Z), workflow input, or <Version> in csproj."
+          exit 1
+
+      # Optional sanity: ensure tag version matches csproj (uncomment if you want strict checks)
+      # - name: Validate tag matches csproj <Version>
+      #   if: ${{ github.ref_type == 'tag' }}
+      #   run: |
+      #     CSVER=$(grep -oPm1 '(?<=<Version>)[^<]+' "$PROJECT_PATH" || true)
+      #     TAGVER="${GITHUB_REF_NAME#v}"
+      #     echo "csproj version: $CSVER | tag version: $TAGVER"
+      #     if [[ "$CSVER" != "$TAGVER" ]]; then
+      #       echo "Version mismatch. Update <Version> in csproj or tag correctly."
+      #       exit 1
+      #     fi
+
+      - name: Pack
+        run: |
+          mkdir -p $ARTIFACT_DIR
+          dotnet pack $PROJECT_PATH -c Release \
+            -p:ContinuousIntegrationBuild=true \
+            -p:PackageVersion=${{ steps.version.outputs.version }} \
+            -o $ARTIFACT_DIR
+
+      - name: Publish .nupkg to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push "$ARTIFACT_DIR/**/*.nupkg" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
