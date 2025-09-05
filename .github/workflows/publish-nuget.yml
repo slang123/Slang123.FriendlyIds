@@ -76,6 +76,10 @@ jobs:
       #       exit 1
       #     fi
 
+      - name: Update csproj <Version>
+        run: |
+          sed -i 's|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|' $PROJECT_PATH
+
       - name: Pack
         run: |
           mkdir -p $ARTIFACT_DIR
