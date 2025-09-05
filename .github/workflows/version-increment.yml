@@ -1,0 +1,25 @@
+name: Version Increment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  version-increment:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get next version
+        uses: reecetech/version-increment@2024.10.1
+        id: version
+        with:
+          scheme: semver
+          increment: patch
+
+      - name: Update csproj version
+        run: |
+          sed -i 's|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|' Slang123.FriendlyIds.csproj

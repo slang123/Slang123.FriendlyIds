@@ -12,6 +12,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/slang123/Slang123.FriendlyIds</PackageProjectUrl>
     <RepositoryUrl>https://github.com/slang123/Slang123.FriendlyIds</RepositoryUrl>
+  <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
